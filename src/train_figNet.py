@@ -144,21 +144,21 @@ def obtener_sets():
         ruta_DJI_0098_A +
         ruta_DJI_0101_A
         )
-    print '\nTraining images: '
-    print ruta_DJI_0010_B[0]
-    print ruta_DJI_0018_A[0]
-    print ruta_DJI_0036_A[0]
-    print ruta_DJI_0043_A[0]
-    print ruta_DJI_0075_A[0]
-    print ruta_DJI_0083_A[0]
-    print ruta_DJI_0098_A[0]
-    print ruta_DJI_0101_A[0]
+    print ('\nTraining images: ')
+    print (ruta_DJI_0010_B[0])
+    print (ruta_DJI_0018_A[0])
+    print (ruta_DJI_0036_A[0])
+    print (ruta_DJI_0043_A[0])
+    print (ruta_DJI_0075_A[0])
+    print (ruta_DJI_0083_A[0])
+    print (ruta_DJI_0098_A[0])
+    print (ruta_DJI_0101_A[0])
     
     lista_test_set_RGB = ruta_DJI_0010_A + ruta_DJI_0051_A
     
-    print '\nTesting images: '
-    print ruta_DJI_0010_A[0] 
-    print ruta_DJI_0051_A[0]
+    print ('\nTesting images: ')
+    print (ruta_DJI_0010_A[0] )
+    print (ruta_DJI_0051_A[0])
     
     lista_training_set_GT = (
         ruta_DJI_0010_B_mask_0 + 
@@ -177,7 +177,43 @@ def obtener_sets():
     
     return lista_training_set_RGB, lista_training_set_GT, lista_test_set_RGB, lista_test_set_GT, nombre_test_GT
 
-def binarizar_predicciones_y_obtener_FP_FN_VP_VN(tensor_predict, test_images_GT):
+
+def obtener_VP_VN(tensor_predict, tensor_GT):
+    
+    tensor_add = np.add(tensor_predict, tensor_GT)
+    
+    tensor_equal2 = np.equal( tensor_add, 2 ).astype('int32')
+    
+    tensor_equal0 = np.equal( tensor_add, 0 ).astype('int32')
+    
+    VP = np.sum(tensor_equal2)
+    
+    VN = np.sum(tensor_equal0)
+    
+    #print ('verdaderos positivos: ', VP)
+    
+    #print ('verdaderos negativos: ', VN)
+    
+    return VP, VN
+    
+def obtener_FP_FN(tensor_predict, tensor_GT):
+
+    tensor_greater_FP = np.greater(tensor_predict, tensor_GT).astype('int32')
+    
+    FP = np.sum(tensor_greater_FP)
+    
+    tensor_greater_FN = np.greater(tensor_GT, tensor_predict).astype('int32')
+    
+    FN = np.sum(tensor_greater_FN)
+    
+    #print ('falsos positivos: ', FP)
+    
+    #print ('falsos negativos: ', FN)
+    
+    return FP, FN
+
+def binarizar_predicciones_y_obtener_VP_VN_FP_FN(tensor_predict, test_images_GT):
+    
     '''
     ------------------------------------
     | classified as:                   |
@@ -201,44 +237,83 @@ def binarizar_predicciones_y_obtener_FP_FN_VP_VN(tensor_predict, test_images_GT)
     False negative (FN):
     FN are fig plant pixels contained in the GT which are not detected by the system
     '''
-    T = 0.5
     
-    total_falsos_positivos = 0
-    total_falsos_negativos = 0
-    total_verdaderos_positivos = 0
-    total_verdaderos_negativos = 0
-    
-    print '\n Binarizing the decoder output and computing the metrics for evaluation. . .\n'
+    print ('\nBinarizing the decoder output and computing the metrics for evaluation. . .\n')
     start_time = time.time()
     
-    for num_img in range( tensor_predict.shape[0] ):        
-        
-        for i in range( tensor_predict.shape[1] ):
-            
-            for j in range( tensor_predict.shape[2] ):
-                
-                if ( tensor_predict[num_img, i, j, :] > T ):
-                    tensor_predict[num_img, i, j, :] = 1
-                else:
-                    tensor_predict[num_img, i, j, :] = 0
-                    
-                if( tensor_predict[num_img, i, j, :] == 1 and test_images_GT[num_img, i, j, :] == 0):
-                    total_falsos_positivos += 1
-                    
-                elif( tensor_predict[num_img, i, j, :] == 0 and test_images_GT[num_img, i, j, :] == 1):
-                    total_falsos_negativos += 1
-                    
-                elif ( tensor_predict[num_img, i, j, :] == 1 and test_images_GT[num_img, i, j, :] == 1):
-                    total_verdaderos_positivos += 1
-                    
-                elif( tensor_predict[num_img, i, j, :] == 0 and test_images_GT[num_img, i, j, :] == 0 ):
-                    total_verdaderos_negativos += 1
+    tensor_predict_bin = np.greater(tensor_predict, 0.5).astype('int32') #Binarizado vectorizado
+    
+    VP, VN = obtener_VP_VN(tensor_predict_bin, test_images_GT)
+    FP, FN = obtener_FP_FN(tensor_predict_bin, test_images_GT)
     
     end_time = time.time()
 
-    print '\n Process completed in: ', ( end_time - start_time ) / 60, ' min\n'
+    print ('\n\tProcess completed in: ', ( end_time - start_time ) / 60, ' min\n')
     
-    return total_falsos_positivos, total_falsos_negativos, total_verdaderos_positivos, total_verdaderos_negativos
+    return tensor_predict_bin, VP, VN, FP, FN
+
+#def binarizar_predicciones_y_obtener_FP_FN_VP_VN(tensor_predict, test_images_GT):
+    #'''
+    #------------------------------------
+    #| classified as:                   |
+    #|----------------------------------|
+    #| crop   | non-crop  | it really is|
+    #|--------|-----------|-------------|
+    #| TP     | FN        | crop        |
+    #|--------|-----------|-------------|
+    #| FP     | TN        | non-crop    |
+    #------------------------------------
+
+    #True positive (TP):
+    #TP are the fig plant pixels correctly classified.
+
+    #True negative (TN):
+    #TN are non-plant pixels properly classified.
+
+    #False positive (FP):
+    #FP are pixels proposed as fig plant pixels but these do not really correspond to some part of the fig bushes
+    
+    #False negative (FN):
+    #FN are fig plant pixels contained in the GT which are not detected by the system
+    #'''
+    #T = 0.5
+    
+    #total_falsos_positivos = 0
+    #total_falsos_negativos = 0
+    #total_verdaderos_positivos = 0
+    #total_verdaderos_negativos = 0
+    
+    #print '\n Binarizing the decoder output and computing the metrics for evaluation. . .\n'
+    #start_time = time.time()
+    
+    #for num_img in range( tensor_predict.shape[0] ):        
+        
+        #for i in range( tensor_predict.shape[1] ):
+            
+            #for j in range( tensor_predict.shape[2] ):
+                
+                #if ( tensor_predict[num_img, i, j, :] > T ):
+                    #tensor_predict[num_img, i, j, :] = 1
+                #else:
+                    #tensor_predict[num_img, i, j, :] = 0
+                    
+                #if( tensor_predict[num_img, i, j, :] == 1 and test_images_GT[num_img, i, j, :] == 0):
+                    #total_falsos_positivos += 1
+                    
+                #elif( tensor_predict[num_img, i, j, :] == 0 and test_images_GT[num_img, i, j, :] == 1):
+                    #total_falsos_negativos += 1
+                    
+                #elif ( tensor_predict[num_img, i, j, :] == 1 and test_images_GT[num_img, i, j, :] == 1):
+                    #total_verdaderos_positivos += 1
+                    
+                #elif( tensor_predict[num_img, i, j, :] == 0 and test_images_GT[num_img, i, j, :] == 0 ):
+                    #total_verdaderos_negativos += 1
+    
+    #end_time = time.time()
+
+    #print '\n Process completed in: ', ( end_time - start_time ) / 60, ' min\n'
+    
+    #return total_falsos_positivos, total_falsos_negativos, total_verdaderos_positivos, total_verdaderos_negativos
 
 def exactitud( FP, FN, VP, VN ):
     return float( VP + VN ) / float( VP + VN + FP + FN )
@@ -260,11 +335,11 @@ def medida_f( FP, FN, VP ):
     return float( 2*VP ) / float( 2*VP + FN + FP )
 
 def ccm (VP, VN, FP, FN):
-    return ( float ( VP * VN - FP * FN) ) / ( float( math.sqrt( ( VP + FP ) * ( VP + FN ) * ( VN + FP ) * ( VN + FN ) ) ) )
+    return ( float ( VP * VN - FP * FN) ) / ( float( math.sqrt( ( float(VP + FP) ) * ( float(VP + FN) ) * ( float(VN + FP) ) * ( float(VN + FN) ) ) ) )
 
 def TXTmetricas( VP, VN, FP, FN, exactitud, precision, recuerdo, especificidad, VPN, medida_f, matthews, total_set, total_training,  total_test, version, filas_training, cols_training, solapa, epocas):
     
-    print '\n Saving the metrics in a txt file. . .\n'
+    print ('\nSaving the metrics in a txt file. . .\n')
     
     fp = open('Metricas_'+str(epocas)+'_epochs_'+version+'.txt','w')
     
@@ -306,7 +381,7 @@ def TXTmetricas( VP, VN, FP, FN, exactitud, precision, recuerdo, especificidad, 
 
 def TXTAccuracy():
     
-    print 'Writing two report files only with the accuracies'
+    print ('Writing two report files only with the accuracies')
     
     fp = open( 'Exactitudes_training_'+version+'.txt', 'a' )
     
@@ -322,7 +397,7 @@ def TXTAccuracy():
     
 def TXTLoss():
     
-    print 'Writing two report files only with the losses'
+    print ('Writing two report files only with the losses')
     
     fp = open( 'Perdidas_training_'+version+'.txt', 'a' )
     
@@ -341,13 +416,14 @@ def PLOTacc():
     x_epocas = range(1, epocas+1)
     
     plt.figure(figsize=(16, 9))
-    plt.plot(x_epocas, lista_acc_train, 'b')
-    plt.plot(x_epocas, lista_acc_test, 'g')
+    plt.plot(x_epocas, lista_acc_train, 'b', label = 'Training accuracy')
+    plt.plot(x_epocas, lista_acc_test, 'g', label = 'Test accuracy')
     # Here the zoom is removed
     # plt.axis([0,46,0,1])
+    plt.title('Training and Test accuracy')
     plt.ylabel(' A  c  c  u  r  a  c  y ')
     plt.xlabel(' E  p  o  c  h ')
-    #plt.legend()
+    plt.legend()
     #plt.grid(True)
     plt.savefig('higNet-'+version+'-ACCURACY.png', dpi = dpi_salida)
 
@@ -355,13 +431,14 @@ def PLOTloss():
     x_epocas = range(1, epocas+1)
     
     plt.figure(figsize=(16, 9))
-    plt.plot(x_epocas, lista_loss_train, 'b')
-    plt.plot(x_epocas, lista_loss_test, 'g')
+    plt.plot(x_epocas, lista_loss_train, 'b', label = 'Training loss')
+    plt.plot(x_epocas, lista_loss_test, 'g', label = 'Test loss')
     # Here the zoom is removed
     # plt.axis([0,46,0,1])
+    plt.title('Training and Test loss')
     plt.ylabel(' L  o  s  s ')
     plt.xlabel(' E  p  o  c  h ')
-    #plt.legend()
+    plt.legend()
     #plt.grid(True)
     plt.savefig('higNet-'+version+'-LOSS.png', dpi = dpi_salida)
 
@@ -387,10 +464,38 @@ dpi_salida = 200
 
 version = 'v2-3'
 
-original_set = '/home/juan/Documentos/higNet_dataset/higNet-v2-1_dataSet/higNet-v2-1_128x128_70Solapa_carpeta_por_imagen/'
+#original_set = '/home/juan/Documentos/higNet_dataset/higNet-v2-1_dataSet/higNet-v2-1_128x128_70Solapa_carpeta_por_imagen/'
+original_set = '../128x128_patches/'
 
-autoencoder = load_model( 'higNet_v2-2_inicial.h5' )
+#autoencoder = load_model( 'higNet_v2-2_inicial.h5' )
+
+
+input_img = Input(shape=(filas_training, cols_training, canales_training))  # adapt this if using `channels_first` image data format
+
+x = Conv2D(32, (7, 7), activation='relu', padding='same')(input_img)
+x = MaxPooling2D((2, 2), padding='same')(x)
+x = Conv2D(8, (3, 3), activation='relu', padding='same')(x)
+x = MaxPooling2D((2, 2), padding='same')(x)
+x = Conv2D(8, (3, 3), activation='relu', padding='same')(x)
+encoded = MaxPooling2D((2, 2), padding='same')(x)
+
+
+x = Conv2D(8, (3, 3), activation='relu', padding='same')(encoded)
+x = UpSampling2D((2, 2))(x)
+x = Conv2D(8, (3, 3), activation='relu', padding='same')(x)
+x = UpSampling2D((2, 2))(x)
+x = Conv2D(16, (3, 3), activation='relu', padding='same')(x)
+x = UpSampling2D((2, 2))(x)
+#decoded = Conv2D(3, (3, 3), activation='sigmoid', padding='same')(x) #antes la salida era de 3 canales 
+decoded = Conv2D(1, (3, 3), activation='sigmoid', padding='same')(x)
+
+autoencoder = Model(input_img, decoded)
+
+autoencoder.compile(optimizer='adadelta', loss='binary_crossentropy', metrics=['acc'])
+
 autoencoder.summary()
+
+
 
 lista_train_RGB, lista_train_GT, lista_test_RGB, lista_test_GT, nombres_test_GT = obtener_sets()
 
@@ -416,7 +521,7 @@ for i_imagen in range( len( lista_test_RGB ) ):
     test_set_RGB[ i_imagen ] = plt.imread( lista_test_RGB[ i_imagen ] )
     test_set_GT[ i_imagen ] = plt.imread( lista_test_GT[i_imagen] )
 
-print 'Reshaping the GTs'
+print ('Reshaping the GTs')
 
 training_set_GT = training_set_GT.astype('float32')
 training_set_GT = np.reshape( training_set_GT, ( len( training_set_GT ), filas_training, cols_training, canales_label ) )
@@ -432,14 +537,14 @@ lista_loss_test = []
 
 for i_epoca in range(1, epocas+1):
     
-    print 'Epoch # ', i_epoca, '/', epocas
+    print ('Epoch # ', i_epoca, '/', epocas)
     
     autoencoder.fit( training_set_RGB, training_set_GT, epochs = 1, shuffle=True )
     
-    print 'Calculating the accuracy of the training set...'
+    print ('Calculating the accuracy of the training set...')
     perdida_training, exactitud_training = autoencoder.evaluate( training_set_RGB, training_set_GT )
     
-    print 'Calculating the accuracy of the test set...'
+    print ('Calculating the accuracy of the test set...')
     perdida_test, exactitud_test = autoencoder.evaluate( test_set_RGB, test_set_GT )
     
     lista_acc_train.append( exactitud_training )
@@ -454,21 +559,23 @@ for i_epoca in range(1, epocas+1):
 PLOTacc()
 PLOTloss()
 
-print '\nSaving the input network. . .\n'
+print ('\nSaving the input network. . .\n')
 autoencoder.save('higNet-'+version+'-'+str(filas_training)+'x'+str(cols_training)+'-'+str(solapa)+'Solapa-'+str( epocas )+'epochs-'+ str(total_training) + 'ejemplos.h5')
 
-print '\nPredicting the *test set*. . .\n'
+print ('\nPredicting the *test set*. . .\n')
 predict_imgs = autoencoder.predict(test_set_RGB)
 dir_predict = os.path.join( original_set,'predict'+str( epocas )+'epocas-'+  version )
 os.mkdir( dir_predict )
-print '\nSaving the predictions. . .\n'
+print ('\nSaving the predictions. . .\n')
 for i_predict in range(total_test):
     
     imsave( os.path.join( dir_predict, nombres_test_GT[i_predict] ), predict_imgs[i_predict].reshape(filas_training, cols_training) )
 
-total_falsos_positivos, total_falsos_negativos, total_verdaderos_positivos, total_verdaderos_negativos = binarizar_predicciones_y_obtener_FP_FN_VP_VN( predict_imgs, test_set_GT )
+#total_falsos_positivos, total_falsos_negativos, total_verdaderos_positivos, total_verdaderos_negativos = binarizar_predicciones_y_obtener_FP_FN_VP_VN( predict_imgs, test_set_GT )
 
-print '\nCalculating the metrics. . .\n'
+predict_imgs, total_verdaderos_positivos, total_verdaderos_negativos, total_falsos_positivos, total_falsos_negativos, = binarizar_predicciones_y_obtener_VP_VN_FP_FN(predict_imgs, test_set_GT)
+
+print ('\nCalculating the metrics. . .\n')
 acc = exactitud(total_falsos_positivos, total_falsos_negativos, total_verdaderos_positivos, total_verdaderos_negativos)
 preci = precision( total_falsos_positivos, total_verdaderos_positivos )
 recall = recuerdo( total_falsos_negativos, total_verdaderos_positivos )
@@ -480,10 +587,10 @@ matthews = ccm( total_verdaderos_positivos, total_verdaderos_negativos, total_fa
 
 TXTmetricas(total_verdaderos_positivos, total_verdaderos_negativos, total_falsos_positivos, total_falsos_negativos, acc, preci, recall, especi, VPN, f_medida, matthews, total_set, total_training, total_test, version, filas_training, cols_training, solapa, epocas)
 
-dir_predict = os.path.join( original_set,'predict'+str( epocas )+'-'+ version +'-epocas_bin_dot5' )
+dir_predict = os.path.join( original_set,'predict'+str( epocas )+'epocas-'+ version +'-_bin_dot5' )
 os.mkdir( dir_predict )
 
-print '\nSaving the binarized predictions. . .\n'
+print ('\nSaving the binarized predictions. . .\n')
 for i_predict in range(total_test):
     
     imsave( os.path.join( dir_predict, nombres_test_GT[i_predict] ), predict_imgs[i_predict].reshape(filas_training, cols_training) )
